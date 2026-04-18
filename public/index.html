@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mesh Circular Shift Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --surface2: #1a1a26;
+      --border: #2a2a3a;
+      --accent: #00e5ff;
+      --accent2: #ff6b35;
+      --accent3: #b06cff;
+      --text: #e8e8f0;
+      --text-muted: #7070a0;
+      --node-idle: #1e1e30;
+      --node-active: #00e5ff22;
+      --node-border: #3a3a5a;
+      --green: #00ffa3;
+      --yellow: #ffd700;
+      --red: #ff4757;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #root { position: relative; z-index: 1; }
+
+    .app {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 32px 20px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .header-tag {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .header h1 {
+      font-size: clamp(28px, 5vw, 52px);
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent3) 50%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.1;
+    }
+    .header p {
+      color: var(--text-muted);
+      margin-top: 10px;
+      font-size: 15px;
+    }
+
+    /* Layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Panel base */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+    }
+    .panel-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel-title::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+
+    /* Control Panel */
+    .control-panel { position: sticky; top: 20px; }
+
+    .input-group { margin-bottom: 20px; }
+    .input-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .input-badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      padding: 2px 8px;
+      background: var(--surface2);
+      border-radius: 4px;
+      color: var(--accent);
+    }
+    .input-field {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-field:focus { border-color: var(--accent); }
+    .input-field.error { border-color: var(--red); }
+    .error-msg {
+      color: var(--red);
+      font-size: 11px;
+      margin-top: 6px;
+      font-family: 'Space Mono', monospace;
+    }
+
+    /* Range slider */
+    .range-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .range-row input[type=range] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    .range-row input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    /* Buttons */
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Syne', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 10px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent3));
+      color: #000;
+    }
+    .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+
+    .step-buttons { display: flex; gap: 8px; }
+    .step-buttons .btn { flex: 1; margin-bottom: 0; font-size: 12px; }
+
+    /* Stage indicator */
+    .stage-indicator {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .stage-pill {
+      flex: 1;
+      padding: 8px;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      font-weight: 700;
+      letter-spacing: 1px;
+      border: 1px solid transparent;
+      transition: all 0.3s;
+    }
+    .stage-pill.idle { background: var(--surface2); color: var(--text-muted); border-color: var(--border); }
+    .stage-pill.active { background: var(--accent)22; color: var(--accent); border-color: var(--accent); }
+    .stage-pill.done { background: var(--green)22; color: var(--green); border-color: var(--green); }
+
+    
+
+    .states-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 700px) {
+      .states-row { grid-template-columns: 1fr; }
+    }
+
+    .state-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .state-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+    .state-label.active-label { color: var(--accent); }
+    .state-label.done-label { color: var(--green); }
+
+    /* Mini grid in state panels */
+    .mini-grid {
+      display: grid;
+      gap: 3px;
+    }
+    .mini-node {
+      background: var(--surface2);
+      border: 1px solid var(--node-border);
+      border-radius: 4px;
+      text-align: center;
+      padding: 4px 2px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text);
+      transition: all 0.3s;
+    }
+    .mini-node.changed {
+      background: var(--accent)33;
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Main visualization */
+    .viz-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    .mesh-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      min-height: 300px;
+    }
+
+    .mesh-grid-wrapper {
+      position: relative;
+    }
+
+    .mesh-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .mesh-node {
+      width: 64px;
+      height: 64px;
+      background: var(--node-idle);
+      border: 1.5px solid var(--node-border);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: default;
+    }
+    .mesh-node:hover {
+      border-color: var(--accent);
+      transform: scale(1.05);
+      z-index: 10;
+    }
+    .mesh-node.animating {
+      background: var(--accent)22;
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent)44;
+      transform: scale(1.08);
+    }
+    .mesh-node.done-anim {
+      background: var(--green)15;
+      border-color: var(--green);
+    }
+    .node-index {
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      color: var(--text-muted);
+      line-height: 1;
+    }
+    .node-value {
+      font-family: 'Space Mono', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+      margin-top: 2px;
+      transition: color 0.3s;
+    }
+    .mesh-node.animating .node-value { color: var(--accent); }
+    .mesh-node.done-anim .node-value { color: var(--green); }
+
+    /* Animation overlay arrows */
+    .arrows-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .arrow-svg {
+      position: absolute;
+      inset: -20px;
+      width: calc(100% + 40px);
+      height: calc(100% + 40px);
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .arrow-path {
+      stroke: var(--accent);
+      stroke-width: 2;
+      fill: none;
+      stroke-dasharray: 6 4;
+      animation: dash-flow 0.8s linear infinite;
+      opacity: 0.7;
+    }
+    .arrow-path.col-arrow { stroke: var(--accent3); }
+    .arrow-path.wrap-arrow { stroke: var(--accent2); stroke-dasharray: 3 3; }
+
+    @keyframes dash-flow {
+      to { stroke-dashoffset: -20; }
+    }
+
+    /* Complexity panel */
+    .complexity-panel { margin-top: 24px; }
+
+    .formula-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .formula-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .formula-card.winner {
+      border-color: var(--green);
+      background: var(--green)10;
+    }
+    .formula-title {
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+    .formula-steps {
+      font-size: 32px;
+      font-weight: 800;
+      font-family: 'Space Mono', monospace;
+    }
+    .formula-steps.mesh-color { color: var(--accent); }
+    .formula-steps.ring-color { color: var(--accent2); }
+    .formula-detail {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-family: 'Space Mono', monospace;
+    }
+    .winner-badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 2px 8px;
+      background: var(--green);
+      color: #000;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    /* Bar chart */
+    .bar-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .bar-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      width: 60px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .bar-track {
+      flex: 1;
+      height: 24px;
+      background: var(--surface2);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: flex;
+      align-items: center;
+      padding-left: 8px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: #000;
+      min-width: 30px;
+    }
+    .bar-mesh { background: var(--accent); }
+    .bar-ring { background: var(--accent2); }
+
+    /* Comparison table */
+    .comp-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+    }
+    .comp-table th {
+      background: var(--surface2);
+      padding: 8px 12px;
+      text-align: left;
+      color: var(--text-muted);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    .comp-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border)66;
+      color: var(--text);
+    }
+    .comp-table tr:last-child td { border-bottom: none; }
+    .comp-table .mesh-val { color: var(--accent); font-weight: 700; }
+    .comp-table .ring-val { color: var(--accent2); }
+    .comp-table .better { color: var(--green); font-size: 10px; }
+
+    /* Shifts info */
+    .shifts-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .shift-badge {
+      flex: 1;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .shift-badge-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 1px;
+    }
+    .shift-badge-val {
+      font-size: 24px;
+      font-weight: 800;
+      font-family: 'Space Mono', monospace;
+      color: var(--accent);
+      margin-top: 4px;
+    }
+    .shift-badge-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: 'Space Mono', monospace;
+    }
+
+    /* Progress */
+    .progress-bar {
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent3));
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 20px 0;
+    }
+
+    /* Speed control */
+    .speed-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .speed-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: 'Space Mono', monospace;
+      white-space: nowrap;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 32px;
+      right: 32px;
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 14px 20px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      color: var(--accent);
+      z-index: 100;
+      animation: slideUp 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes fadeOut {
+      to { opacity: 0; transform: translateY(-10px); }
+    }
+
+    .speed-options {
+      display: flex;
+      gap: 6px;
+    }
+    .speed-btn {
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .speed-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent)15;
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+
+<script>
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ---- Pure Shift Logic ----
+function computeShift(p, q) {
+  const sqrtP = Math.sqrt(p);
+  return {
+    rowShift: q % sqrtP,
+    colShift: Math.floor(q / sqrtP),
+    sqrtP
+  };
+}
+
+function buildInitialData(p) {
+  return Array.from({ length: p }, (_, i) => i);
+}
+
+function applyRowShift(data, p, rowShift) {
+  const sqrtP = Math.sqrt(p);
+  const result = [...data];
+  for (let row = 0; row < sqrtP; row++) {
+    const rowStart = row * sqrtP;
+    const rowData = data.slice(rowStart, rowStart + sqrtP);
+    for (let col = 0; col < sqrtP; col++) {
+      const srcCol = ((col - rowShift) % sqrtP + sqrtP) % sqrtP;
+      result[rowStart + col] = rowData[srcCol];
+    }
+  }
+  return result;
+}
+
+function applyColShift(data, p, colShift) {
+  const sqrtP = Math.sqrt(p);
+  const result = [...data];
+  for (let col = 0; col < sqrtP; col++) {
+    for (let row = 0; row < sqrtP; row++) {
+      const srcRow = ((row - colShift) % sqrtP + sqrtP) % sqrtP;
+      result[row * sqrtP + col] = data[srcRow * sqrtP + col];
+    }
+  }
+  return result;
+}
+
+function meshSteps(p, q) {
+  const sqrtP = Math.sqrt(p);
+  return (q % sqrtP) + Math.floor(q / sqrtP);
+}
+
+function ringSteps(p, q) {
+  return Math.min(q, p - q);
+}
+
+// ---- Components ----
+
+function MiniGrid({ data, sqrtP, changedIndices = [] }) {
+  return React.createElement('div', {
+    className: 'mini-grid',
+    style: { gridTemplateColumns: `repeat(${sqrtP}, 1fr)` }
+  },
+    data.map((val, i) =>
+      React.createElement('div', {
+        key: i,
+        className: `mini-node${changedIndices.includes(i) ? ' changed' : ''}`
+      }, val)
+    )
+  );
+}
+
+function MeshGrid({ data, sqrtP, animatingNodes, stage }) {
+  const nodeSize = sqrtP <= 4 ? 64 : sqrtP <= 6 ? 52 : 40;
+  const gap = 8;
+
+  const nodeStyle = { width: nodeSize, height: nodeSize };
+
+  return React.createElement('div', {
+    className: 'mesh-container'
+  },
+    React.createElement('div', { className: 'mesh-grid-wrapper' },
+      React.createElement('div', {
+        className: 'mesh-grid',
+        style: {
+          gridTemplateColumns: `repeat(${sqrtP}, ${nodeSize}px)`,
+          gap: `${gap}px`
+        }
+      },
+        data.map((val, i) => {
+          const isAnim = animatingNodes.includes(i);
+          const isDone = stage === 3;
+          return React.createElement('div', {
+            key: i,
+            className: `mesh-node${isAnim ? ' animating' : ''}${isDone ? ' done-anim' : ''}`,
+            style: nodeStyle
+          },
+            React.createElement('div', { className: 'node-index' }, `n${i}`),
+            React.createElement('div', { className: 'node-value' }, val)
+          );
+        })
+      )
+    )
+  );
+}
+
+function ComplexityPanel({ p, q }) {
+  const { rowShift, colShift, sqrtP } = computeShift(p, q);
+  const mesh = meshSteps(p, q);
+  const ring = ringSteps(p, q);
+  const maxSteps = Math.max(mesh, ring, 1);
+  const saving = ring > 0 ? (((ring - mesh) / ring) * 100).toFixed(0) : 0;
+
+  // Table data for various p/q combos
+  const tableRows = [
+    { p: 16, q: 3 }, { p: 16, q: 5 }, { p: 16, q: 7 },
+    { p: 64, q: 3 }, { p: 64, q: 5 }, { p: 64, q: 7 },
+  ];
+
+  return React.createElement('div', { className: 'panel complexity-panel' },
+    React.createElement('div', { className: 'panel-title' }, 'COMPLEXITY ANALYSIS'),
+
+    // Shift amounts
+    React.createElement('div', { className: 'shifts-row' },
+      React.createElement('div', { className: 'shift-badge' },
+        React.createElement('div', { className: 'shift-badge-label' }, 'ROW SHIFT'),
+        React.createElement('div', { className: 'shift-badge-val' }, rowShift),
+        React.createElement('div', { className: 'shift-badge-sub' }, `q mod √p = ${q} mod ${sqrtP}`)
+      ),
+      React.createElement('div', { className: 'shift-badge' },
+        React.createElement('div', { className: 'shift-badge-label' }, 'COL SHIFT'),
+        React.createElement('div', { className: 'shift-badge-val' }, colShift),
+        React.createElement('div', { className: 'shift-badge-sub' }, `⌊q/√p⌋ = ⌊${q}/${sqrtP}⌋`)
+      ),
+      React.createElement('div', { className: 'shift-badge' },
+        React.createElement('div', { className: 'shift-badge-label' }, 'TOTAL STEPS'),
+        React.createElement('div', { className: 'shift-badge-val', style: { color: 'var(--green)' } }, mesh),
+        React.createElement('div', { className: 'shift-badge-sub' }, `${rowShift} + ${colShift}`)
+      )
+    ),
+
+    // Formula comparison
+    React.createElement('div', { className: 'formula-row' },
+      React.createElement('div', { className: `formula-card winner` },
+        React.createElement('div', { className: 'formula-title' }, 'MESH STEPS'),
+        React.createElement('div', { className: 'formula-steps mesh-color' }, mesh),
+        React.createElement('div', { className: 'formula-detail' }, `(q mod √p) + ⌊q/√p⌋`),
+        React.createElement('div', { className: 'formula-detail' }, `= ${rowShift} + ${colShift}`),
+        React.createElement('span', { className: 'winner-badge' }, '✓ FASTER')
+      ),
+      React.createElement('div', { className: 'formula-card' },
+        React.createElement('div', { className: 'formula-title' }, 'RING STEPS'),
+        React.createElement('div', { className: 'formula-steps ring-color' }, ring),
+        React.createElement('div', { className: 'formula-detail' }, `min{q, p−q}`),
+        React.createElement('div', { className: 'formula-detail' }, `= min{${q}, ${p - q}}`),
+        saving > 0 ? React.createElement('div', { className: 'formula-detail', style: { color: 'var(--red)', marginTop: 6 } }, `${saving}% slower`) : null
+      )
+    ),
+
+    // Bar chart
+    React.createElement('div', { className: 'bar-chart' },
+      React.createElement('div', { className: 'bar-row' },
+        React.createElement('div', { className: 'bar-label' }, 'MESH'),
+        React.createElement('div', { className: 'bar-track' },
+          React.createElement('div', {
+            className: 'bar-fill bar-mesh',
+            style: { width: `${(mesh / maxSteps) * 100}%` }
+          }, mesh)
+        )
+      ),
+      React.createElement('div', { className: 'bar-row' },
+        React.createElement('div', { className: 'bar-label' }, 'RING'),
+        React.createElement('div', { className: 'bar-track' },
+          React.createElement('div', {
+            className: 'bar-fill bar-ring',
+            style: { width: `${(ring / maxSteps) * 100}%` }
+          }, ring)
+        )
+      )
+    ),
+
+    React.createElement('div', { className: 'divider' }),
+
+    // Reference table
+    React.createElement('div', { className: 'panel-title', style: { marginBottom: 12 } }, 'REFERENCE TABLE'),
+    React.createElement('table', { className: 'comp-table' },
+      React.createElement('thead', null,
+        React.createElement('tr', null,
+          React.createElement('th', null, 'p'),
+          React.createElement('th', null, 'q'),
+          React.createElement('th', null, '√p'),
+          React.createElement('th', null, 'Mesh'),
+          React.createElement('th', null, 'Ring'),
+          React.createElement('th', null, 'Savings')
+        )
+      ),
+      React.createElement('tbody', null,
+        tableRows.map(({ p: tp, q: tq }) => {
+          const tm = meshSteps(tp, tq);
+          const tr = ringSteps(tp, tq);
+          const ts = tr > 0 ? `${(((tr - tm) / tr) * 100).toFixed(0)}%` : '—';
+          return React.createElement('tr', { key: `${tp}-${tq}` },
+            React.createElement('td', null, tp),
+            React.createElement('td', null, tq),
+            React.createElement('td', null, Math.sqrt(tp)),
+            React.createElement('td', { className: 'mesh-val' }, tm),
+            React.createElement('td', { className: 'ring-val' }, tr),
+            React.createElement('td', { className: 'better' }, ts)
+          );
+        })
+      )
+    )
+  );
+}
+
+function ControlPanel({ p, q, onP, onQ, onAnimate, onReset, onStep, isAnimating, stage, speed, onSpeed }) {
+  const [pErr, setPErr] = useState('');
+  const [qErr, setQErr] = useState('');
+
+  const perfectSquares = [4, 9, 16, 25, 36, 49, 64];
+
+  function handleP(v) {
+    const n = parseInt(v);
+    if (isNaN(n)) { setPErr('Enter a number'); return; }
+    if (!perfectSquares.includes(n)) { setPErr('Must be a perfect square (4,9,16,25,36,49,64)'); return; }
+    if (n < 4 || n > 64) { setPErr('Must be between 4 and 64'); return; }
+    setPErr('');
+    onP(n);
+  }
+
+  function handleQ(v) {
+    const n = parseInt(v);
+    if (isNaN(n)) { setQErr('Enter a number'); return; }
+    if (n < 1 || n >= p) { setQErr(`Must be between 1 and ${p - 1}`); return; }
+    setQErr('');
+    onQ(n);
+  }
+
+  const { rowShift, colShift, sqrtP } = computeShift(p, q);
+
+  const stageStatus = (s) => {
+    if (stage > s) return 'done';
+    if (stage === s) return 'active';
+    return 'idle';
+  };
+
+  return React.createElement('div', { className: 'panel control-panel' },
+    React.createElement('div', { className: 'panel-title' }, 'CONTROLS'),
+
+    // p input
+    React.createElement('div', { className: 'input-group' },
+      React.createElement('div', { className: 'input-label' },
+        React.createElement('span', null, 'Nodes (p)'),
+        React.createElement('span', { className: 'input-badge' }, `${sqrtP}×${sqrtP} mesh`)
+      ),
+      React.createElement('input', {
+        type: 'number',
+        className: `input-field${pErr ? ' error' : ''}`,
+        value: p,
+        onChange: e => handleP(e.target.value),
+        min: 4, max: 64
+      }),
+      React.createElement('div', { className: 'range-row', style: { marginTop: 8 } },
+        perfectSquares.map(ps =>
+          React.createElement('button', {
+            key: ps,
+            onClick: () => handleP(ps),
+            style: {
+              padding: '3px 6px',
+              background: p === ps ? 'var(--accent)' : 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              color: p === ps ? '#000' : 'var(--text-muted)',
+              fontFamily: 'Space Mono, monospace',
+              fontSize: 10,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              fontWeight: p === ps ? 700 : 400
+            }
+          }, ps)
+        )
+      ),
+      pErr && React.createElement('div', { className: 'error-msg' }, pErr)
+    ),
+
+    // q input
+    React.createElement('div', { className: 'input-group' },
+      React.createElement('div', { className: 'input-label' },
+        React.createElement('span', null, 'Shift Amount (q)'),
+        React.createElement('span', { className: 'input-badge' }, `1 – ${p - 1}`)
+      ),
+      React.createElement('input', {
+        type: 'number',
+        className: `input-field${qErr ? ' error' : ''}`,
+        value: q,
+        onChange: e => handleQ(e.target.value),
+        min: 1, max: p - 1
+      }),
+      React.createElement('div', { className: 'range-row', style: { marginTop: 8 } },
+        React.createElement('input', {
+          type: 'range',
+          min: 1, max: p - 1, value: q,
+          onChange: e => handleQ(e.target.value),
+          style: { flex: 1 }
+        }),
+        React.createElement('span', { style: { fontFamily: 'Space Mono, monospace', fontSize: 12, color: 'var(--accent)', width: 24 } }, q)
+      ),
+      qErr && React.createElement('div', { className: 'error-msg' }, qErr)
+    ),
+
+    React.createElement('div', { className: 'divider' }),
+
+    // Stage indicators
+    React.createElement('div', { className: 'stage-indicator' },
+      React.createElement('div', { className: `stage-pill ${stageStatus(1)}` }, 'STAGE 1'),
+      React.createElement('div', { className: `stage-pill ${stageStatus(2)}` }, 'STAGE 2'),
+      React.createElement('div', { className: `stage-pill ${stage === 3 ? 'done' : 'idle'}` }, 'DONE')
+    ),
+
+    // Progress
+    React.createElement('div', { className: 'progress-bar' },
+      React.createElement('div', { className: 'progress-fill', style: { width: `${(stage / 3) * 100}%` } })
+    ),
+
+    // Speed control
+    React.createElement('div', { className: 'speed-row' },
+      React.createElement('span', { className: 'speed-label' }, 'SPEED:'),
+      React.createElement('div', { className: 'speed-options' },
+        [['slow', 1200], ['med', 700], ['fast', 300]].map(([label, ms]) =>
+          React.createElement('button', {
+            key: label,
+            className: `speed-btn${speed === ms ? ' active' : ''}`,
+            onClick: () => onSpeed(ms)
+          }, label.toUpperCase())
+        )
+      )
+    ),
+
+    // Buttons
+    React.createElement('button', {
+      className: 'btn btn-primary',
+      onClick: onAnimate,
+      disabled: isAnimating
+    }, isAnimating ? '▶ ANIMATING...' : '▶ AUTO ANIMATE'),
+
+    React.createElement('div', { className: 'step-buttons' },
+      React.createElement('button', {
+        className: 'btn btn-secondary',
+        onClick: () => onStep(1),
+        disabled: isAnimating || stage >= 1
+      }, 'STAGE 1'),
+      React.createElement('button', {
+        className: 'btn btn-secondary',
+        onClick: () => onStep(2),
+        disabled: isAnimating || stage < 1 || stage >= 2
+      }, 'STAGE 2')
+    ),
+
+    React.createElement('button', {
+      className: 'btn btn-secondary',
+      onClick: onReset,
+      style: { marginTop: 0 }
+    }, '↺ RESET')
+  );
+}
+
+// ---- Main App ----
+function App() {
+  const [p, setP] = useState(16);
+  const [q, setQ] = useState(5);
+  const [stage, setStage] = useState(0); // 0=initial, 1=after row, 2=after col=done
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animNodes, setAnimNodes] = useState([]);
+  const [speed, setSpeed] = useState(700);
+  const [toast, setToast] = useState('');
+
+  const { rowShift, colShift, sqrtP } = useMemo(() => computeShift(p, q), [p, q]);
+
+  const initialData = useMemo(() => buildInitialData(p), [p]);
+  const afterRowData = useMemo(() => applyRowShift(initialData, p, rowShift), [initialData, p, rowShift]);
+  const afterColData = useMemo(() => applyColShift(afterRowData, p, colShift), [afterRowData, p, colShift]);
+
+  const currentData = stage === 0 ? initialData : stage === 1 ? afterRowData : afterColData;
+
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(''), 3000);
+  }
+
+  function reset() {
+    setStage(0);
+    setAnimNodes([]);
+    setIsAnimating(false);
+  }
+
+  // Reset when p or q changes
+  useEffect(() => { reset(); }, [p, q]);
+
+  async function runStage(s) {
+    if (s === 1) {
+      // Animate row shift
+      setIsAnimating(true);
+      // Flash rows one by one
+      for (let row = 0; row < sqrtP; row++) {
+        const rowNodes = Array.from({ length: sqrtP }, (_, col) => row * sqrtP + col);
+        setAnimNodes(rowNodes);
+        await sleep(speed / sqrtP + 100);
+      }
+      setAnimNodes([]);
+      setStage(1);
+      setIsAnimating(false);
+      showToast(`Stage 1 done: row shift by ${rowShift}`);
+    } else if (s === 2) {
+      setIsAnimating(true);
+      for (let col = 0; col < sqrtP; col++) {
+        const colNodes = Array.from({ length: sqrtP }, (_, row) => row * sqrtP + col);
+        setAnimNodes(colNodes);
+        await sleep(speed / sqrtP + 100);
+      }
+      setAnimNodes([]);
+      setStage(2);
+      setIsAnimating(false);
+      showToast(`Stage 2 done: col shift by ${colShift} — Circular shift complete!`);
+    }
+  }
+
+  async function autoAnimate() {
+    if (isAnimating) return;
+    reset();
+    await sleep(300);
+    await runStage(1);
+    await sleep(400);
+    await runStage(2);
+  }
+
+  function handleStep(s) {
+    runStage(s);
+  }
+
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  // Changed indices for state panels
+  const changedAfterRow = initialData.reduce((acc, v, i) => {
+    if (afterRowData[i] !== v) acc.push(i); return acc;
+  }, []);
+  const changedFinal = afterRowData.reduce((acc, v, i) => {
+    if (afterColData[i] !== v) acc.push(i); return acc;
+  }, []);
+
+  return React.createElement('div', { className: 'app' },
+    React.createElement('div', { className: 'header' },
+      React.createElement('div', { className: 'header-tag' }, '⬡ PARALLEL COMPUTING VISUALIZER'),
+      React.createElement('h1', null, 'Mesh Circular Shift'),
+      React.createElement('p', null, 'Interactive 2-stage visualization of circular q-shift on a √p × √p mesh topology')
+    ),
+
+    React.createElement('div', { className: 'main-grid' },
+      // Left: Control Panel
+      React.createElement(ControlPanel, {
+        p, q,
+        onP: setP, onQ: setQ,
+        onAnimate: autoAnimate,
+        onReset: reset,
+        onStep: handleStep,
+        isAnimating,
+        stage,
+        speed,
+        onSpeed: setSpeed
+      }),
+
+      // Right: Visualization
+      React.createElement('div', null,
+        // States row
+        React.createElement('div', { className: 'states-row' },
+          React.createElement('div', { className: 'state-panel' },
+            React.createElement('div', { className: 'state-label' }, 'INITIAL STATE'),
+            React.createElement(MiniGrid, { data: initialData, sqrtP })
+          ),
+          React.createElement('div', { className: 'state-panel' },
+            React.createElement('div', { className: `state-label${stage >= 1 ? ' active-label' : ''}` },
+              `AFTER STAGE 1 (row +${rowShift})`
+            ),
+            React.createElement(MiniGrid, {
+              data: afterRowData, sqrtP,
+              changedIndices: stage >= 1 ? changedAfterRow : []
+            })
+          ),
+          React.createElement('div', { className: 'state-panel' },
+            React.createElement('div', { className: `state-label${stage >= 2 ? ' done-label' : ''}` },
+              `FINAL STATE (col +${colShift})`
+            ),
+            React.createElement(MiniGrid, {
+              data: afterColData, sqrtP,
+              changedIndices: stage >= 2 ? changedFinal : []
+            })
+          )
+        ),
+
+        // Main grid
+        React.createElement('div', { className: 'viz-panel' },
+          React.createElement('div', { className: 'panel-title' },
+            stage === 0 ? 'INITIAL — NODE DATA' :
+            stage === 1 ? `STAGE 1 COMPLETE — ROW SHIFT BY ${rowShift}` :
+            `COMPLETE — q=${q} CIRCULAR SHIFT DONE`
+          ),
+          React.createElement(MeshGrid, {
+            data: currentData,
+            sqrtP,
+            animatingNodes: animNodes,
+            stage
+          })
+        ),
+
+        // Complexity panel
+        React.createElement(ComplexityPanel, { p, q })
+      )
+    ),
+
+    toast && React.createElement('div', { className: 'toast' }, toast)
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
