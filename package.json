@@ -1,0 +1,15 @@
+{
+  "name": "mesh-shift-visualizer",
+  "version": "1.0.0",
+  "description": "Interactive visualization of circular q-shift on a 2D mesh topology for parallel computing",
+  "scripts": {
+    "start": "serve public",
+    "dev": "serve public --listen 3000"
+  },
+  "dependencies": {
+    "serve": "^14.2.1"
+  },
+  "keywords": ["parallel-computing", "mesh", "circular-shift", "visualization"],
+  "author": "",
+  "license": "MIT"
+}
